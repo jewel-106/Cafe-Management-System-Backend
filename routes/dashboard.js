@@ -3,50 +3,41 @@
 const express = require('express');
 const connection = require('../connection');
 const router = express.Router();
+const pool = require('../connection'); 
 var auth = require('../services/authentication');
 
-router.get('/details',auth.authenticateToken,(req,res,next)=>{
-    var categoryCount;
-    var productCount;
-    var billCount;
-    var query = "select count(id) as categoryCount from category";
-    connection.query(query,(err,results)=>{
-        if(!err){
-            categoryCount = results[0].categoryCount;
-        }
-        else {
-            return res.status(500).json(err);
-        }
-    });
-
-    var query = "select count(id) as productCount from product";
-    connection.query(query,(err,results)=>{
-        if(!err){
-            productCount = results[0].productCount;
-        }else
-        {
-            return res.status(500).json(err);
-        }
-    });
-
-    var query = "select count(id) as billCount from bill";
-    connection.query(query,(err,results)=>{
-        if(!err){
-            billCount = results[0].billCount;
-            var data = {
-                category:categoryCount,
-                product:productCount,
-                bill:billCount
-            }
-            return res.status(200).json(data);
-        }
-        else{
-            return res.status(500).json(err);
-        }
-    })
-
-
-})
+router.get('/details', auth.authenticateToken, async (req, res, next) => {
+    try {
+      // Fetch category count
+      const categoryQuery = `SELECT COUNT(id) AS categoryCount FROM "category"`;
+      const categoryResult = await connection.query(categoryQuery);
+      const categoryCount = categoryResult.rows[0].categorycount;
+  
+      // Fetch product count
+      const productQuery = `SELECT COUNT(id) AS productCount FROM "product"`;
+      const productResult = await connection.query(productQuery);
+      const productCount = productResult.rows[0].productcount;
+  
+      // Fetch bill count
+      const billQuery = `SELECT COUNT(id) AS billCount FROM "bill"`;
+      const billResult = await connection.query(billQuery);
+      const billCount = billResult.rows[0].billcount;
+  
+      // Respond with the collected data
+      const data = {
+        category: categoryCount,
+        product: productCount,
+        bill: billCount
+      };
+  
+      return res.status(200).json(data);
+  
+    } catch (err) {
+      console.error("Error fetching details:", err);
+      return res.status(500).json({ error: err.message });
+    }
+  });
+  
 
 
 module.exports = router;

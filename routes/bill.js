@@ -1,5 +1,5 @@
 const express = require("express");
-const connection = require("../connection");
+const pool = require("../connection"); // Import the PostgreSQL pool
 const router = express.Router();
 
 const ejs = require("ejs");
@@ -9,129 +9,120 @@ const fs = require("fs");
 const uuid = require("uuid");
 const auth = require("../services/authentication");
 
-router.post("/generateReport", auth.authenticateToken,async (req, res) => {
+router.post("/generateReport", auth.authenticateToken, async (req, res) => {
   const generatedUuid = uuid.v1();
   const orderDetails = req.body;
   let productDetailsReport = orderDetails.productDetails;
+
+  // Parse product details if it's a string
   if (typeof productDetailsReport === 'string') {
     try {
-        productDetailsReport = JSON.parse(productDetailsReport);
+      productDetailsReport = JSON.parse(productDetailsReport);
     } catch (err) {
-        console.error("Error parsing productDetails:", err);
-        return res.status(400).send("Invalid productDetails format");
+      console.error("Error parsing productDetails:", err);
+      return res.status(400).send("Invalid productDetails format");
     }
-}
-  //const productDetailsReport = JSON.parse(orderDetails.productDetails);
+  }
 
-//   const productDetailsReport = typeof orderDetails.productDetails === 'string'
-//   ? JSON.parse(orderDetails.productDetails)
-//   : orderDetails.productDetails;
-//   let productDetailsReport;
-//   try {
-//     this.productDetailsReport = typeof orderDetails.productDetails === 'string'
-//       ? JSON.parse(orderDetails.productDetails)
-//       : orderDetails.productDetails;
-//   } catch (error) {
-//     console.error('Error parsing productDetails:', error);
-//     this.dataSource = [];
-//   }
+  // SQL query to insert bill details into the database
+  const query = `
+    INSERT INTO "bill" (name, uuid, email, contact_number, payment_method, total, product_details, createdby) 
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+  `;
+  
+  // Parameters for the insert query
+  const values = [
+    orderDetails.name,
+    generatedUuid,
+    orderDetails.email,
+    orderDetails.contactNumber,
+    orderDetails.paymentMethod,
+    orderDetails.totalAmount,
+    JSON.stringify(orderDetails.productDetails), // Store product details as a JSON string
+    res.locals.email,
+  ];
 
-  const query =
-    "INSERT INTO bill (name, uuid, email, contactNumber, paymentMethod, total, productDetails, createdBy) VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
+  try {
+    // Insert the order details into the bill table
+    const result = await pool.query(query, values);
 
-  connection.query(
-    query,
-    [
-      orderDetails.name,
-      generatedUuid,
-      orderDetails.email,
-      orderDetails.contactNumber,
-      orderDetails.paymentMethod,
-      orderDetails.totalAmount,
-      orderDetails.productDetails,
-      res.locals.email,
-    ],
-    async (err, results) => {
-      if (err) {
-        return res.status(500).json(err);
-      }
-
-      try {
-        // Render EJS to HTML
-        const htmlContent = await ejs.renderFile(
-          path.join(__dirname, "report.ejs"),
-          {
-            productDetails: productDetailsReport,
-            name: orderDetails.name,
-            email: orderDetails.email,
-            contactNumber: orderDetails.contactNumber,
-            paymentMethod: orderDetails.paymentMethod,
-            totalAmount: orderDetails.totalAmount,
-          }
-        );
-
-        // Generate PDF using Puppeteer
-        const browser = await puppeteer.launch();
-        const page = await browser.newPage();
-        await page.setContent(htmlContent, { waitUntil: "load" });
-
-        const pdfPath = `./generated_pdf/${generatedUuid}.pdf`;
-        await page.pdf({ path: pdfPath, format: "A4" });
-
-        await browser.close();
-
-        return res.status(200).json({ uuid: generatedUuid });
-      } catch (err) {
-        console.error(err);
-        return res.status(500).json(err);
-      }
+    if (result.rowCount === 0) {
+      return res.status(500).json({ message: "Failed to insert bill details" });
     }
-  );
+
+    // Render EJS to HTML
+    const htmlContent = await ejs.renderFile(path.join(__dirname, "report.ejs"), {
+      productDetails: productDetailsReport,
+      name: orderDetails.name,
+      email: orderDetails.email,
+      contactNumber: orderDetails.contactNumber,
+      paymentMethod: orderDetails.paymentMethod,
+      totalAmount: orderDetails.totalAmount,
+    });
+
+    // Generate PDF using Puppeteer
+    const browser = await puppeteer.launch();
+    const page = await browser.newPage();
+    await page.setContent(htmlContent, { waitUntil: "load" });
+
+    const pdfPath = `./generated_pdf/${generatedUuid}.pdf`;
+    await page.pdf({ path: pdfPath, format: "A4" });
+
+    await browser.close();
+
+    return res.status(200).json({ uuid: generatedUuid });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ message: "Error generating report", error: err.message || err });
+  }
 });
 
-router.post("/getPdf",auth.authenticateToken,async (req, res) => {
+router.post("/getPdf", auth.authenticateToken, async (req, res) => {
   try {
     const orderDetails = req.body;
     let productDetailsReport = orderDetails.productDetails;
     const pdfPath = `./generated_pdf/${orderDetails.uuid}.pdf`;
 
+    // Check if the PDF already exists
     if (fs.existsSync(pdfPath)) {
       res.contentType("application/pdf");
       return fs.createReadStream(pdfPath).pipe(res);
     }
+
+    // Parse product details if it's a string
     if (typeof productDetailsReport === 'string') {
-        try {
-            productDetailsReport = JSON.parse(productDetailsReport);
-        } catch (err) {
-            console.error("Error parsing productDetails:", err);
-            return res.status(400).send("Invalid productDetails format");
-        }
-    }
-    // If PDF does not exist, generate it
-    //const productDetailsReport = JSON.parse(orderDetails.productDetails);
-    // const productDetailsReport = typeof orderDetails.productDetails === 'string'
-    // ? JSON.parse(orderDetails.productDetails)
-    // : orderDetails.productDetails;
-    // let productDetailsReport;
-    // try {
-    //   this.productDetailsReport = typeof orderDetails.productDetails === 'string'
-    //     ? JSON.parse(orderDetails.productDetails)
-    //     : orderDetails.productDetails;
-    // } catch (error) {
-    //   console.error('Error parsing productDetails:', error);
-    //   this.productDetailsReport = [];
-    // }
-    const htmlContent = await ejs.renderFile(
-      path.join(__dirname, "report.ejs"),
-      {
-        productDetails: productDetailsReport,
-        name: orderDetails.name,
-        email: orderDetails.email,
-        contactNumber: orderDetails.contactNumber,
-        paymentMethod: orderDetails.paymentMethod,
-        totalAmount: orderDetails.totalAmount,
+      try {
+        productDetailsReport = JSON.parse(productDetailsReport);
+      } catch (err) {
+        console.error("Error parsing productDetails:", err);
+        return res.status(400).send("Invalid productDetails format");
       }
-    );
+    }
+
+    // Query to fetch the order details from the PostgreSQL database using the UUID
+    const query = `
+      SELECT name, email, contact_number, payment_method, total, product_details,createdby
+      FROM "bill"
+      WHERE uuid = $1
+    `;
+    const result = await pool.query(query, [orderDetails.uuid]);
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ message: "Order not found" });
+    }
+
+    // Use data from the database if available
+    const dbOrderDetails = result.rows[0];
+
+    // Render EJS to HTML
+    const htmlContent = await ejs.renderFile(path.join(__dirname, "report.ejs"), {
+      productDetails: productDetailsReport || JSON.parse(dbOrderDetails.product_details),
+      name: dbOrderDetails.name,
+      email: dbOrderDetails.email,
+      contactNumber: dbOrderDetails.contact_number,
+      paymentMethod: dbOrderDetails.payment_method,
+      totalAmount: dbOrderDetails.total,
+    });
 
     // Generate PDF using Puppeteer
     const browser = await puppeteer.launch();
@@ -153,30 +144,34 @@ router.post("/getPdf",auth.authenticateToken,async (req, res) => {
   }
 });
 
-router.get("/getBills", auth.authenticateToken, (req, res, next) => {
-  var query = "select * from bill order by id DESC";
-  connection.query(query, (err, results) => {
-    if (!err) {
-      return res.status(200).json(results);
-    } else {
-      return res.status(500).json(err);
-    }
-  });
+router.get("/getBills", auth.authenticateToken, async (req, res, next) => {
+  try {
+    const query = `SELECT * FROM "bill" ORDER BY id DESC`;
+    const result = await pool.query(query);
+    
+    return res.status(200).json(result.rows); // `rows` contains the result set in PostgreSQL
+  } catch (err) {
+    console.error("Error fetching bills:", err);
+    return res.status(500).json({ message: "Error fetching bills", error: err.message });
+  }
 });
 
-router.delete("/delete/:id", auth.authenticateToken, (req, res, next) => {
+router.delete("/delete/:id", auth.authenticateToken, async (req, res, next) => {
   const id = req.params.id;
-  var query = "delete from bill where id=?";
-  connection.query(query, [id], (err, results) => {
-    if (!err) {
-      if (results.affectedRows == 0) {
-        return res.status(404).json({ message: "Bill id does not found" });
-      }
-      return res.status(200).json({ message: "Bill Deleted Successfully" });
-    } else {
-      return res.status(500).json(err);
+
+  try {
+    const query = `DELETE FROM "bill" WHERE id = $1`;
+    const result = await pool.query(query, [id]);
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ message: "Bill id not found" });
     }
-  });
+
+    return res.status(200).json({ message: "Bill Deleted Successfully" });
+  } catch (err) {
+    console.error("Error deleting bill:", err);
+    return res.status(500).json({ message: "Error deleting bill", error: err.message });
+  }
 });
 
 module.exports = router;

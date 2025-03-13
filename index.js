@@ -12,7 +12,6 @@ const dashboardRoutes = require('./routes/dashboard');
 const app = express();
 
 app.use((req, res, next) => {
-    console.log('Headers:', req.headers);
     next();
   });
 app.use(express.json({ limit: '10mb' }));  // Increase the limit here

@@ -9,6 +9,7 @@ require("dotenv").config();
 const bcrypt = require("bcryptjs");
 var auth = require("../services/authentication");
 var checkRole = require("../services/checkRole");
+var pool = require("../connection");
 
 var transporter = nodemailer.createTransport({
   host: "sandbox.smtp.mailtrap.io",
@@ -33,69 +34,72 @@ const upload = multer({
   limits: { fileSize: 100 * 1024 * 1024 } // 100 MB limit
 });
 
-// User Signup with Profile Picture Upload
+
+
+
+
 router.post("/signup", upload.single("profile_photo"), (req, res) => {
-  
-console.log(req);
+  console.log(req);
 
-  let { name, email, contactNumber, password } = req.body;
-  let profilePhoto = req.file;
+  let { name, email, contact_number, password } = req.body;
+  let profile_photo = req.file;
 
-  
-  connection.query(
-    "SELECT email FROM user WHERE email = ?",
+  // Check if email already exists
+  pool.query(
+    'SELECT email FROM "user" WHERE email = $1',
     [email],
     (err, results) => {
-      if (!err) {
-        if (results.length > 0) {
-          return res.status(400).json({ message: "Email already exists." });
-        }
-
-        // Hash Password
-        const hashedPassword = bcrypt.hashSync(password, 10);
-
-        connection.query(
-          "INSERT INTO user (name, email, contactNumber, password, profile_photo, status, role) VALUES (?, ?, ?, ?, ?, ?, ?)",
-          [
-            name,
-            email,
-            contactNumber,
-            hashedPassword,
-            profilePhoto ? profilePhoto.filename : null,
-            "true",
-            "user",
-          ],
-          (err, result) => {
-            if (!err) {
-              return res
-                .status(201)
-                .json({ message: "User Registered Successfully!" });
-            } else {
-              return res.status(500).json(err);
-            }
-          }
-        );
-      } else {
-        return res.status(500).json(err);
+      if (err) {
+        console.error(err);
+        return res.status(500).json({ message: "Internal server error" });
       }
+
+      if (results.rows.length > 0) {
+        return res.status(400).json({ message: "Email already exists." });
+      }
+
+      // Hash password
+      const hashedPassword = bcrypt.hashSync(password, 10);
+
+      // Insert new user into the database
+      pool.query(
+        'INSERT INTO "user" (name, email, contact_number, password, profile_photo, status, role) VALUES ($1, $2, $3, $4, $5, $6, $7)',
+        [
+          name,
+          email,
+          contact_number,
+          hashedPassword,
+          profile_photo ? profile_photo.filename : null,
+          'true',  // Ensure this is a boolean if your column is boolean
+          'user',
+        ],
+        (err, result) => {
+          if (err) {
+            console.error(err);
+            return res.status(500).json({ message: "Failed to register user" });
+          } else {
+            return res.status(201).json({ message: "User Registered Successfully!" });
+          }
+        }
+      );
     }
   );
 });
 
-// User Login
+
 router.post("/login", (req, res) => {
   let { email, password } = req.body;
-
+  // Change the MySQL query syntax to PostgreSQL query
   connection.query(
-    "SELECT * FROM user WHERE email = ?",
+    "SELECT * FROM \"user\" WHERE email = $1",  // PostgreSQL uses $1 for parameterized queries
     [email],
     (err, results) => {
       if (!err) {
-        if (results.length == 0) {
+        if (results.rows.length == 0) {  // Use `results.rows` in PostgreSQL
           return res.status(401).json({ message: "Invalid Credentials" });
         }
-
-        const user = results[0];
+        
+        const user = results.rows[0];  // Access the first row of the result
         if (!bcrypt.compareSync(password, user.password)) {
           return res.status(401).json({ message: "Invalid Credentials" });
         }
@@ -108,7 +112,7 @@ router.post("/login", (req, res) => {
             expiresIn: "8h",
           }
         );
-        console.log("token: ",token);
+        console.log("token: ", token);
         return res.status(200).json({ message: "Login Successful", token });
       } else {
         return res.status(500).json(err);
@@ -120,18 +124,18 @@ router.post("/login", (req, res) => {
 // Forgot Password - Generate OTP and send via email
 router.post("/forgotPassword", (req, res) => {
   const user = req.body;
-  query = "select email from user where email=?";
-  connection.query(query, [user.email], (err, results) => {
+  const query = 'SELECT email FROM "user" WHERE email = $1';  // PostgreSQL query with parameterized email
+  pool.query(query, [user.email], (err, results) => {
     if (!err) {
-      if (results.length <= 0) {
+      if (results.rows.length <= 0) {  // Access results.rows for PostgreSQL
         return res.status(400).json({ message: "Email not found." });
       } else {
         const otp = Math.floor(100000 + Math.random() * 900000); // Generate 6-digit OTP
 
         // Save OTP to the database with check_otp false (not verified yet)
-        query =
-          "insert into otp_requests (email, otp, check_otp) values (?, ?, false)";
-        connection.query(query, [user.email, otp], (err, result) => {
+        const otpQuery =
+          'INSERT INTO "otp_requests" (email, otp, check_otp) VALUES ($1, $2, false)';
+        pool.query(otpQuery, [user.email, otp], (err, result) => {
           if (!err) {
             // Send OTP via email
             var mailOptions = {
@@ -162,22 +166,27 @@ router.post("/forgotPassword", (req, res) => {
   });
 });
 
+
 // Verify OTP - To verify the OTP sent via email
 router.post("/verifyOtp", (req, res) => {
   const { email, otp } = req.body;
-  query =
-    "select * from otp_requests where email=? and otp=? and check_otp=false";
-  connection.query(query, [email, otp], (err, results) => {
+
+  // Adjusting query for PostgreSQL
+  const query =
+    'SELECT * FROM "otp_requests" WHERE email = $1 AND otp = $2 AND check_otp = false';
+
+  pool.query(query, [email, otp], (err, results) => {
     if (!err) {
-      if (results.length <= 0) {
+      if (results.rows.length <= 0) {  // Use `results.rows` for PostgreSQL
         return res
           .status(400)
           .json({ message: "Invalid OTP or OTP already verified." });
       } else {
         // Update OTP status to true (verified)
-        query =
-          "update otp_requests set check_otp=true where email=? and otp=?";
-        connection.query(query, [email, otp], (err, result) => {
+        const updateQuery =
+          'UPDATE "otp_requests" SET check_otp = true WHERE email = $1 AND otp = $2';
+
+        pool.query(updateQuery, [email, otp], (err, result) => {
           if (!err) {
             return res.status(200).json({
               message: "OTP verified. You can now reset your password.",
@@ -198,12 +207,13 @@ router.post("/resetPassword", (req, res) => {
   const { email, newPassword } = req.body;
   const hashedNewPassword = bcrypt.hashSync(newPassword, 10); // Hash the new password
 
-  query = "update user set password=? where email=?";
-  connection.query(query, [hashedNewPassword, email], (err, results) => {
+  // Update the user's password
+  const query = 'UPDATE "user" SET password = $1 WHERE email = $2';
+  pool.query(query, [hashedNewPassword, email], (err, results) => {
     if (!err) {
       // Optionally, delete the OTP after password reset
-      query = "delete from otp_requests where email=?";
-      connection.query(query, [email], (err, result) => {
+      const deleteQuery = 'DELETE FROM "otp_requests" WHERE email = $1';
+      pool.query(deleteQuery, [email], (err, result) => {
         if (!err) {
           return res
             .status(200)
@@ -218,19 +228,6 @@ router.post("/resetPassword", (req, res) => {
   });
 });
 
-// Get All Users - Admin Only (authentication and authorization)
-router.get("/get", auth.authenticateToken, checkRole.checkRole, (req, res) => {
-  var query =
-    "select id,name,email,contactNumber,status from user where role='admin' or role='user'";
-  connection.query(query, (err, results) => {
-    if (!err) {
-      return res.status(200).json(results);
-    } else {
-      return res.status(500).json(err);
-    }
-  });
-});
-
 // Update User Status - Admin Only
 router.patch(
   "/update",
@@ -238,10 +235,10 @@ router.patch(
   checkRole.checkRole,
   (req, res) => {
     let user = req.body;
-    var query = "update user set status=? where id=?";
-    connection.query(query, [user.status, user.id], (err, results) => {
+    const query = 'UPDATE "user" SET status = $1 WHERE id = $2';
+    pool.query(query, [user.status, user.id], (err, results) => {
       if (!err) {
-        if (results.affectedRows == 0) {
+        if (results.rowCount === 0) {
           return res.status(404).json({ message: "User id does not exist" });
         }
         return res.status(200).json({ message: "User Updated Successfully" });
@@ -263,41 +260,40 @@ router.post("/changePassword", auth.authenticateToken, (req, res) => {
   const email = res.locals.email; // Email from the token
 
   // First, get the user's current hashed password from the database
-  var query = "select password from user where email=?";
-  connection.query(query, [email], (err, results) => {
-    if (!err) {
-      if (results.length <= 0) {
-        return res.status(400).json({ message: "User not found" });
-      }
-
-      // Compare the provided oldPassword with the hashed password from the database
-      if (!bcrypt.compareSync(user.oldPassword, results[0].password)) {
-        return res.status(400).json({ message: "Incorrect Old Password" });
-      }
-
-      // Hash the new password before updating it
-      query = "update user set password=? where email=?";
-      connection.query(
-        query,
-        [bcrypt.hashSync(user.newPassword, 10), email],
-        (err, results) => {
-          if (!err) {
-            return res
-              .status(200)
-              .json({ message: "Password Updated Successfully." });
-          } else {
-            return res.status(500).json(err);
-          }
-        }
-      );
-    } else {
+  const query = 'SELECT password FROM "user" WHERE email = $1';
+  pool.query(query, [email], (err, results) => {
+    if (err) {
       return res.status(500).json(err);
     }
+
+    if (results.rowCount <= 0) {
+      return res.status(400).json({ message: "User not found" });
+    }
+
+    // Compare the provided oldPassword with the hashed password from the database
+    if (!bcrypt.compareSync(user.oldPassword, results.rows[0].password)) {
+      return res.status(400).json({ message: "Incorrect Old Password" });
+    }
+
+    // Hash the new password before updating it
+    const updateQuery = 'UPDATE "user" SET password = $1 WHERE email = $2';
+    pool.query(
+      updateQuery,
+      [bcrypt.hashSync(user.newPassword, 10), email],
+      (err, results) => {
+        if (err) {
+          return res.status(500).json(err);
+        }
+        return res
+          .status(200)
+          .json({ message: "Password Updated Successfully." });
+      }
+    );
   });
 });
 
-// Get User Details - Authenticated User Only  getUserDetails
-// Get User Profile
+
+// Get User Details - After authenticating the user
 router.get("/getUserDetails", auth.authenticateToken, (req, res) => {
   const userId = req.user.id; // Get the user ID from the authenticated token
 
@@ -308,23 +304,23 @@ router.get("/getUserDetails", auth.authenticateToken, (req, res) => {
 
   // Fetch user details from the database
   const query = `
-    SELECT id, name, email, contactNumber, profile_photo 
-    FROM user 
-    WHERE id = ?
+    SELECT id, name, email, contact_number, profile_photo 
+    FROM "user" 
+    WHERE id = $1
   `;
-  connection.query(query, [userId], (err, results) => {
+  pool.query(query, [userId], (err, results) => {
     if (err) {
       console.error("Database error:", err);
       return res.status(500).json({ message: "Database error", error: err.message || err });
     }
 
     // Check if the user exists
-    if (results.length === 0) {
+    if (results.rowCount === 0) {
       return res.status(404).json({ message: "User not found" });
     }
 
     // Format the user data
-    const user = results[0];
+    const user = results.rows[0];
     console.log("User data:", user);
 
     // Construct the full URL for the profile photo (if it exists)
@@ -337,47 +333,48 @@ router.get("/getUserDetails", auth.authenticateToken, (req, res) => {
   });
 });
 
+
 router.put("/updateProfile", auth.authenticateToken, upload.single("profilePhoto"), (req, res) => {
-  const { name, contactNumber, email } = req.body;
+  const { name, contact_number, email } = req.body;
   const id = req.user.id;
 
   // Validate required fields
-  if (!name || !contactNumber || !email) {
+  if (!name || !contact_number || !email) {
     return res.status(400).json({ message: "All fields are required" });
   }
 
   // Step 1: Fetch the existing profile photo URL from the database
-  const fetchQuery = `SELECT profile_photo FROM user WHERE id = ?`;
-  connection.query(fetchQuery, [id], (fetchErr, fetchResult) => {
+  const fetchQuery = `SELECT profile_photo FROM "user" WHERE id = $1`;
+  pool.query(fetchQuery, [id], (fetchErr, fetchResult) => {
     if (fetchErr) {
       return res.status(500).json({ message: "Error fetching profile data", error: fetchErr.message || fetchErr });
     }
 
-    if (fetchResult.length === 0) {
+    if (fetchResult.rowCount === 0) {
       return res.status(404).json({ message: "User not found" });
     }
 
     // Step 2: Use the existing profile photo URL if no new file is uploaded
-    let profilePhotoUrl = fetchResult[0].profile_photo; // Default to existing photo
+    let profilePhotoUrl = fetchResult.rows[0].profile_photo; // Default to existing photo
     if (req.file) {
-      profilePhotoUrl = `${req.file.filename}`; // Update to new photo if uploaded
+      profilePhotoUrl = req.file.filename; // Update to new photo if uploaded
     }
 
     // Step 3: Update the user profile
-    const updateQuery = `UPDATE user SET name = ?, contactNumber = ?, email = ?, profile_photo = ? WHERE id = ?`;
-    const values = [name, contactNumber, email, profilePhotoUrl, id];
+    const updateQuery = `UPDATE "user" SET name = $1, contact_number = $2, email = $3, profile_photo = $4 WHERE id = $5`;
+    const values = [name, contact_number, email, profilePhotoUrl, id];
 
-    connection.query(updateQuery, values, (updateErr, updateResult) => {
+    pool.query(updateQuery, values, (updateErr, updateResult) => {
       if (updateErr) {
         return res.status(500).json({ message: "Error updating profile", error: updateErr.message || updateErr });
       }
 
-      if (updateResult.affectedRows === 0) {
+      if (updateResult.rowCount === 0) {
         return res.status(404).json({ message: "User not found or no changes made" });
       }
 
       // Step 4: Send back the updated user data including profile photo URL
-      const updatedUser = { id, name, contactNumber, email, profilePhotoUrl };
+      const updatedUser = { id, name, contact_number, email, profilePhotoUrl };
       return res.status(200).json({
         message: "Profile updated successfully",
         user: updatedUser,
@@ -385,5 +382,7 @@ router.put("/updateProfile", auth.authenticateToken, upload.single("profilePhoto
     });
   });
 });
+
+
 
 module.exports = router;
