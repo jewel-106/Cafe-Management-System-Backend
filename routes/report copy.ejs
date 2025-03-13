@@ -1,0 +1,115 @@
+<html>
+    <head>
+        <style>
+            body {
+                font-family: Arial, sans-serif;
+                background-color: #f4f4f9;
+                margin: 0;
+                padding: 0;
+            }
+            h3 {
+                color: #008c3a;
+                text-align: center;
+                font-size: 28px;
+                margin-bottom: 20px;
+            }
+            table {
+                width: 100%;
+                border-collapse: collapse;
+                margin: 20px 0;
+            }
+            th, td {
+                padding: 15px;
+                border: 1px solid #ddd;
+                text-align: left;
+                font-size: 16px;
+            }
+            th {
+                background-color: #008c3a;
+                color: white;
+                font-weight: bold;
+            }
+            tr:nth-child(even) {
+                background-color: #f2f2f2;
+            }
+            tr:hover {
+                background-color: #ddd;
+            }
+            .table-header {
+                background-color: #009d4d;
+                color: white;
+            }
+            .footer {
+                background-color: #333;
+                color: white;
+                text-align: center;
+                padding: 20px 0;
+                position: fixed;
+                bottom: 0;
+                width: 100%;
+            }
+            .footer h4 {
+                margin: 10px 0;
+                font-size: 18px;
+            }
+            .footer p {
+                font-size: 16px;
+            }
+            .footer a {
+                color: #ffdd57;
+                text-decoration: none;
+                font-weight: bold;
+            }
+            .footer a:hover {
+                text-decoration: underline;
+            }
+        </style>
+    </head>
+    <body>
+        <h3>Cafe Management System</h3>
+
+        <table>
+            <tr>
+                <th>Name: <%= name %></th>
+                <th>Email: <%= email %></th>
+            </tr>
+            <tr>
+                <th>Contact Number: <%= contactNumber %></th>
+                <th>Payment Method: <%= paymentMethod %></th>
+            </tr>
+        </table>
+
+        <h3>Product Details</h3>
+        <table>
+            <tr class="table-header">
+                <th>Name</th>
+                <th>Category</th>
+                <th>Quantity</th>
+                <th>Price</th>
+                <th>Sub Total</th>
+            </tr>
+
+            <% if (productDetails.length > 0) { %>
+                <% productDetails.forEach(product => { %>
+                    <tr>
+                        <td><%= product.name %></td>
+                        <td><%= product.category %></td>
+                        <td><%= product.quantity %></td>
+                        <td><%= product.price %></td>
+                        <td><%= product.total %></td>
+                    </tr>
+                <% }); %>
+            <% } %>
+        </table>
+
+        <h3>Total: <%= totalAmount %></h3>
+        <h3>Thank you for visiting. Please visit again!</h3>
+
+        <div class="footer">
+            <h4>Advertisement</h4>
+            <p>Enjoy a 20% discount on your next visit! Use code <strong>CAFE20</strong> at checkout.</p>
+            <p>Visit us again for more exciting offers!</p>
+            <a href="https://www.yourcafeworld.com">Visit Our Website</a>
+        </div>
+    </body>
+</html>

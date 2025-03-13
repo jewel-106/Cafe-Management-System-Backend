@@ -1,0 +1,150 @@
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Cafe Online Shop</title>
+        <style>
+            body {
+                font-family: 'Arial', sans-serif;
+                background-color: #f5f5f5;
+                margin: 0;
+                padding: 0;
+                box-sizing: border-box;
+                overflow-x: hidden;
+            }
+            header {
+                background-color: #333;
+                color: white;
+                padding: 9px; /* Reduced padding here */
+                text-align: center;
+            }
+            header h1 {
+                margin: 0;
+                font-size: 2.5rem;
+            }
+            .container {
+                width: 100%;
+                margin: 0 auto;
+                padding: 7px 15px; /* Reduced top padding here */
+            }
+            .table-wrapper {
+                background-color: white;
+                border-radius: 5px;
+                box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+                overflow: hidden;
+                margin-top: 23px;
+                padding: 14px;
+                width: 100%;
+            }
+            .table-wrapper table {
+                width: 100%;
+                border-collapse: collapse;
+            }
+            th, td {
+                padding: 10px;
+                text-align: left;
+                border: 1px solid #ddd;
+                font-size: 1rem;
+            }
+            th {
+                background-color: #007b5e;
+                color: white;
+                font-weight: bold;
+            }
+            tr:nth-child(even) {
+                background-color: #f9f9f9;
+            }
+            tr:hover {
+                background-color: #f1f1f1;
+            }
+            .footer {
+                background-color: #333;
+                color: white;
+                text-align: center;
+                padding: 14px;
+                width: 100%;
+            }
+            .footer h4 {
+                margin: 7px 0;
+            }
+            .footer p {
+                font-size: 12px;
+            }
+            .footer a {
+                color: #ffcc00;
+                font-weight: bold;
+                text-decoration: none;
+            }
+            .footer a:hover {
+                text-decoration: underline;
+            }
+            .product-image {
+                width: 40px;
+                height: 40px;
+                border-radius: 50%;
+                object-fit: cover;
+            }
+        </style>
+    </head>
+    <body>
+        <header>
+            <h1>Cafe Online Shop</h1>
+            <p>Enjoy delicious food and beverages delivered to your door</p>
+        </header>
+
+        <div class="container">
+            <div class="table-wrapper">
+                <h3 style="color: #007b5e;">Customer Details</h3>
+                <table>
+                    <tr>
+                        <th>Name: <%= name %></th>
+                        <th>Email: <%= email %></th>
+                    </tr>
+                    <tr>
+                        <th>Contact Number: <%= contactNumber %></th>
+                        <th>Payment Method: <%= paymentMethod %></th>
+                    </tr>
+                </table>
+            </div>
+
+            <div class="table-wrapper">
+                <h3 style="color: #007b5e;">Product Details</h3>
+                <table>
+                    <tr>
+                        <th>Product Image</th>
+                        <th>Name</th>
+                        <th>Category</th>
+                        <th>Quantity</th>
+                        <th>Price</th>
+                        <th>Sub Total</th>
+                    </tr>
+
+                    <% if(productDetails.length > 0) { %>
+                        <% productDetails.forEach(product => { %>
+                            <tr>
+                                <td><img src="https://loremflickr.com/200/200?random=1" class="product-image" alt="Product Image" /></td>
+                                <td><%= product.name %></td>
+                                <td><%= product.category %></td>
+                                <td><%= product.quantity %></td>
+                                <td><%= product.price %></td>
+                                <td><%= product.total %></td>
+                            </tr>
+                        <% }); %>
+                    <% } %>
+                </table>
+            </div>
+
+            <div class="table-wrapper">
+                <h3 style="color: #007b5e;">Total: <%= totalAmount %></h3>
+                <h3>Thank you for visiting. Please visit again!</h3>
+            </div>
+        </div>
+
+        <div class="footer">
+            <h4>Special Offer</h4>
+            <p>Get 10% off your next order! Use the code <strong>CAFE10</strong> at checkout.</p>
+            <p>Visit our cafe for an exclusive experience!</p>
+            <a href="http://localhost:4200/cafe/order">Order Now</a>
+        </div>
+    </body>
+</html>

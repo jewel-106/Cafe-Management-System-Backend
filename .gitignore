@@ -1,0 +1,33 @@
+# Node.js dependencies
+/node_modules/
+
+# Build output
+/dist/
+/build/
+/*.log
+
+# Environment files
+.env
+*.env
+
+# IDE and editor settings
+.vscode/
+/.idea/
+/*.sublime-workspace
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Debug files
+*.log
+
+# npm package lock file
+package-lock.json
+
+# Typescript build
+*.tsbuildinfo
+
+# Other files to ignore
+*.bak
+*.swp

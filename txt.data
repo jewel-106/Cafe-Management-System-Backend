@@ -1,0 +1,3 @@
+sudo -u postgres psql doererp < /home/rana/Documents/doererp__2025-02-12__15.42.35.sql
+CREATE USER doererp WITH PASSWORD 'doererp';
+GRANT ALL PRIVILEGES ON DATABASE doererp TO doererp;
