@@ -32,6 +32,7 @@ const pool = new Pool({
     connectTimeout: 10000
 });
 
+
 // Establish connection
 pool.connect((err, client, release) => {
     if (!err) {

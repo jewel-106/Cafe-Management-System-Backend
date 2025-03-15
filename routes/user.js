@@ -89,6 +89,7 @@ router.post("/signup", upload.single("profile_photo"), (req, res) => {
 
 router.post("/login", (req, res) => {
   let { email, password } = req.body;
+
   // Change the MySQL query syntax to PostgreSQL query
   connection.query(
     "SELECT * FROM \"user\" WHERE email = $1",  // PostgreSQL uses $1 for parameterized queries
@@ -100,6 +101,12 @@ router.post("/login", (req, res) => {
         }
         
         const user = results.rows[0];  // Access the first row of the result
+
+        // Check if the user status is false
+        if (user.status === "false") {
+          return res.status(403).json({ message: "Waiting for admin approval" });
+        }
+
         if (!bcrypt.compareSync(password, user.password)) {
           return res.status(401).json({ message: "Invalid Credentials" });
         }
@@ -227,6 +234,25 @@ router.post("/resetPassword", (req, res) => {
     }
   });
 });
+
+// Get All Users - Admin Only (authentication and authorization)
+// Get All Users - Admin Only (authentication and authorization)
+router.get("/get", auth.authenticateToken, checkRole.checkRole, (req, res) => {
+  const query = `
+    SELECT id, name, email, contact_number, status 
+    FROM "user" 
+    WHERE role = 'admin' OR role = 'user'
+  `;
+
+  pool.query(query, (err, results) => {
+    if (!err) {
+      return res.status(200).json(results.rows); // Use results.rows for PostgreSQL
+    } else {
+      return res.status(500).json({ error: err.message });
+    }
+  });
+});
+
 
 // Update User Status - Admin Only
 router.patch(
@@ -382,6 +408,7 @@ router.put("/updateProfile", auth.authenticateToken, upload.single("profilePhoto
     });
   });
 });
+
 
 
 

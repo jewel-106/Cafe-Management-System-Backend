@@ -7,10 +7,10 @@ var checkRole = require('../services/checkRole');
 // Add Product
 router.post('/add', auth.authenticateToken, checkRole.checkRole, async (req, res) => {
     const product = req.body;
-    const query = `INSERT INTO "product" (name, categoryId, description, price, status) VALUES ($1, $2, $3, $4, 'true')`;
+    const query = `INSERT INTO "product" (name, categoryid, description, price, status) VALUES ($1, $2, $3, $4, 'true')`;
     
     try {
-      await pool.query(query, [product.name, product.categoryId, product.description, product.price]); // Use pool.query
+      await pool.query(query, [product.name, product.categoryid, product.description, product.price]); // Use pool.query
       return res.status(200).json({ message: "Product Added Successfully." });
     } catch (err) {
       return res.status(500).json(err);
@@ -19,9 +19,9 @@ router.post('/add', auth.authenticateToken, checkRole.checkRole, async (req, res
 
 // Get all Products
 router.get('/get', auth.authenticateToken, async (req, res) => {
-    const query = `SELECT p.id, p.name, p.description, p.price, p.status, c.id AS categoryId, c.name AS categoryName
+    const query = `SELECT p.id, p.name, p.description, p.price, p.status, c.id AS categoryid, c.name AS categoryname
                    FROM "product" AS p
-                   INNER JOIN category AS c ON p.categoryId = c.id`;
+                   INNER JOIN category AS c ON p.categoryid = c.id where p.status = 'true'`;
     
     try {
       const results = await pool.query(query); // Use pool.query
@@ -60,10 +60,10 @@ router.get('/getbyId/:id', auth.authenticateToken, async (req, res) => {
 // Update Product
 router.patch('/update', auth.authenticateToken, checkRole.checkRole, async (req, res) => {
     const product = req.body;
-    const query = `UPDATE "product" SET name = $1, categoryId = $2, description = $3, price = $4 WHERE id = $5`;
+    const query = `UPDATE "product" SET name = $1, categoryid = $2, description = $3, price = $4 WHERE id = $5`;
   
     try {
-      const result = await pool.query(query, [product.name, product.categoryId, product.description, product.price, product.id]); // Use pool.query
+      const result = await pool.query(query, [product.name, product.categoryid, product.description, product.price, product.id]); // Use pool.query
       if (result.rowCount === 0) {
         return res.status(404).json({ message: "Product id does not found." });
       }
