@@ -22,21 +22,17 @@ var transporter = nodemailer.createTransport({
 
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
-    cb(null, 'uploads/'); // Save files in the 'uploads' directory
+    cb(null, "uploads/"); // Save files in the 'uploads' directory
   },
   filename: function (req, file, cb) {
     cb(null, Date.now() + path.extname(file.originalname)); // Rename the file to avoid conflicts
-  }
+  },
 });
 
 const upload = multer({
   storage: storage,
-  limits: { fileSize: 100 * 1024 * 1024 } // 100 MB limit
+  limits: { fileSize: 100 * 1024 * 1024 }, // 100 MB limit
 });
-
-
-
-
 
 router.post("/signup", upload.single("profile_photo"), (req, res) => {
   console.log(req);
@@ -70,15 +66,17 @@ router.post("/signup", upload.single("profile_photo"), (req, res) => {
           contact_number,
           hashedPassword,
           profile_photo ? profile_photo.filename : null,
-          'true',  // Ensure this is a boolean if your column is boolean
-          'user',
+          "true", // Ensure this is a boolean if your column is boolean
+          "user",
         ],
         (err, result) => {
           if (err) {
             console.error(err);
             return res.status(500).json({ message: "Failed to register user" });
           } else {
-            return res.status(201).json({ message: "User Registered Successfully!" });
+            return res
+              .status(201)
+              .json({ message: "User Registered Successfully!" });
           }
         }
       );
@@ -86,25 +84,27 @@ router.post("/signup", upload.single("profile_photo"), (req, res) => {
   );
 });
 
-
 router.post("/login", (req, res) => {
   let { email, password } = req.body;
 
   // Change the MySQL query syntax to PostgreSQL query
   connection.query(
-    "SELECT * FROM \"user\" WHERE email = $1",  // PostgreSQL uses $1 for parameterized queries
+    'SELECT * FROM "user" WHERE email = $1', // PostgreSQL uses $1 for parameterized queries
     [email],
     (err, results) => {
       if (!err) {
-        if (results.rows.length == 0) {  // Use `results.rows` in PostgreSQL
+        if (results.rows.length == 0) {
+          // Use `results.rows` in PostgreSQL
           return res.status(401).json({ message: "Invalid Credentials" });
         }
-        
-        const user = results.rows[0];  // Access the first row of the result
+
+        const user = results.rows[0]; // Access the first row of the result
 
         // Check if the user status is false
         if (user.status === "false") {
-          return res.status(403).json({ message: "Waiting for admin approval" });
+          return res
+            .status(403)
+            .json({ message: "Waiting for admin approval" });
         }
 
         if (!bcrypt.compareSync(password, user.password)) {
@@ -131,10 +131,11 @@ router.post("/login", (req, res) => {
 // Forgot Password - Generate OTP and send via email
 router.post("/forgotPassword", (req, res) => {
   const user = req.body;
-  const query = 'SELECT email FROM "user" WHERE email = $1';  // PostgreSQL query with parameterized email
+  const query = 'SELECT email FROM "user" WHERE email = $1'; // PostgreSQL query with parameterized email
   pool.query(query, [user.email], (err, results) => {
     if (!err) {
-      if (results.rows.length <= 0) {  // Access results.rows for PostgreSQL
+      if (results.rows.length <= 0) {
+        // Access results.rows for PostgreSQL
         return res.status(400).json({ message: "Email not found." });
       } else {
         const otp = Math.floor(100000 + Math.random() * 900000); // Generate 6-digit OTP
@@ -173,7 +174,6 @@ router.post("/forgotPassword", (req, res) => {
   });
 });
 
-
 // Verify OTP - To verify the OTP sent via email
 router.post("/verifyOtp", (req, res) => {
   const { email, otp } = req.body;
@@ -184,7 +184,8 @@ router.post("/verifyOtp", (req, res) => {
 
   pool.query(query, [email, otp], (err, results) => {
     if (!err) {
-      if (results.rows.length <= 0) {  // Use `results.rows` for PostgreSQL
+      if (results.rows.length <= 0) {
+        // Use `results.rows` for PostgreSQL
         return res
           .status(400)
           .json({ message: "Invalid OTP or OTP already verified." });
@@ -239,7 +240,7 @@ router.post("/resetPassword", (req, res) => {
 // Get All Users - Admin Only (authentication and authorization)
 router.get("/get", auth.authenticateToken, checkRole.checkRole, (req, res) => {
   const query = `
-    SELECT id, name, email, contact_number, status 
+    SELECT id, name, email, contact_number, status,role
     FROM "user" 
     WHERE role = 'admin' OR role = 'user'
   `;
@@ -252,7 +253,6 @@ router.get("/get", auth.authenticateToken, checkRole.checkRole, (req, res) => {
     }
   });
 });
-
 
 // Update User Status - Admin Only
 router.patch(
@@ -318,7 +318,6 @@ router.post("/changePassword", auth.authenticateToken, (req, res) => {
   });
 });
 
-
 // Get User Details - After authenticating the user
 router.get("/getUserDetails", auth.authenticateToken, (req, res) => {
   const userId = req.user.id; // Get the user ID from the authenticated token
@@ -330,14 +329,16 @@ router.get("/getUserDetails", auth.authenticateToken, (req, res) => {
 
   // Fetch user details from the database
   const query = `
-    SELECT id, name, email, contact_number, profile_photo 
+    SELECT *
     FROM "user" 
     WHERE id = $1
   `;
   pool.query(query, [userId], (err, results) => {
     if (err) {
       console.error("Database error:", err);
-      return res.status(500).json({ message: "Database error", error: err.message || err });
+      return res
+        .status(500)
+        .json({ message: "Database error", error: err.message || err });
     }
 
     // Check if the user exists
@@ -351,7 +352,9 @@ router.get("/getUserDetails", auth.authenticateToken, (req, res) => {
 
     // Construct the full URL for the profile photo (if it exists)
     if (user.profile_photo) {
-      user.profile_photo = `${req.protocol}://${req.get("host")}/uploads/${user.profile_photo}`;
+      user.profile_photo = `${req.protocol}://${req.get("host")}/uploads/${
+        user.profile_photo
+      }`;
     }
 
     // Return the user data
@@ -359,57 +362,76 @@ router.get("/getUserDetails", auth.authenticateToken, (req, res) => {
   });
 });
 
+router.put(
+  "/updateProfile",
+  auth.authenticateToken,
+  upload.single("profilePhoto"),
+  (req, res) => {
+    const { name, contact_number, email } = req.body;
+    const id = req.user.id;
 
-router.put("/updateProfile", auth.authenticateToken, upload.single("profilePhoto"), (req, res) => {
-  const { name, contact_number, email } = req.body;
-  const id = req.user.id;
-
-  // Validate required fields
-  if (!name || !contact_number || !email) {
-    return res.status(400).json({ message: "All fields are required" });
-  }
-
-  // Step 1: Fetch the existing profile photo URL from the database
-  const fetchQuery = `SELECT profile_photo FROM "user" WHERE id = $1`;
-  pool.query(fetchQuery, [id], (fetchErr, fetchResult) => {
-    if (fetchErr) {
-      return res.status(500).json({ message: "Error fetching profile data", error: fetchErr.message || fetchErr });
+    // Validate required fields
+    if (!name || !contact_number || !email) {
+      return res.status(400).json({ message: "All fields are required" });
     }
 
-    if (fetchResult.rowCount === 0) {
-      return res.status(404).json({ message: "User not found" });
-    }
-
-    // Step 2: Use the existing profile photo URL if no new file is uploaded
-    let profilePhotoUrl = fetchResult.rows[0].profile_photo; // Default to existing photo
-    if (req.file) {
-      profilePhotoUrl = req.file.filename; // Update to new photo if uploaded
-    }
-
-    // Step 3: Update the user profile
-    const updateQuery = `UPDATE "user" SET name = $1, contact_number = $2, email = $3, profile_photo = $4 WHERE id = $5`;
-    const values = [name, contact_number, email, profilePhotoUrl, id];
-
-    pool.query(updateQuery, values, (updateErr, updateResult) => {
-      if (updateErr) {
-        return res.status(500).json({ message: "Error updating profile", error: updateErr.message || updateErr });
+    // Step 1: Fetch the existing profile photo URL from the database
+    const fetchQuery = `SELECT profile_photo FROM "user" WHERE id = $1`;
+    pool.query(fetchQuery, [id], (fetchErr, fetchResult) => {
+      if (fetchErr) {
+        return res
+          .status(500)
+          .json({
+            message: "Error fetching profile data",
+            error: fetchErr.message || fetchErr,
+          });
       }
 
-      if (updateResult.rowCount === 0) {
-        return res.status(404).json({ message: "User not found or no changes made" });
+      if (fetchResult.rowCount === 0) {
+        return res.status(404).json({ message: "User not found" });
       }
 
-      // Step 4: Send back the updated user data including profile photo URL
-      const updatedUser = { id, name, contact_number, email, profilePhotoUrl };
-      return res.status(200).json({
-        message: "Profile updated successfully",
-        user: updatedUser,
+      // Step 2: Use the existing profile photo URL if no new file is uploaded
+      let profilePhotoUrl = fetchResult.rows[0].profile_photo; // Default to existing photo
+      if (req.file) {
+        profilePhotoUrl = req.file.filename; // Update to new photo if uploaded
+      }
+
+      // Step 3: Update the user profile
+      const updateQuery = `UPDATE "user" SET name = $1, contact_number = $2, email = $3, profile_photo = $4 WHERE id = $5`;
+      const values = [name, contact_number, email, profilePhotoUrl, id];
+
+      pool.query(updateQuery, values, (updateErr, updateResult) => {
+        if (updateErr) {
+          return res
+            .status(500)
+            .json({
+              message: "Error updating profile",
+              error: updateErr.message || updateErr,
+            });
+        }
+
+        if (updateResult.rowCount === 0) {
+          return res
+            .status(404)
+            .json({ message: "User not found or no changes made" });
+        }
+
+        // Step 4: Send back the updated user data including profile photo URL
+        const updatedUser = {
+          id,
+          name,
+          contact_number,
+          email,
+          profilePhotoUrl,
+        };
+        return res.status(200).json({
+          message: "Profile updated successfully",
+          user: updatedUser,
+        });
       });
     });
-  });
-});
-
-
-
+  }
+);
 
 module.exports = router;
