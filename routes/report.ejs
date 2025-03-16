@@ -101,8 +101,8 @@
                         <th>Email: <%= email %></th>
                     </tr>
                     <tr>
-                        <th>Contact Number: <%= contactNumber %></th>
-                        <th>Payment Method: <%= paymentMethod %></th>
+                        <th>Contact Number: <%= contact_number %></th>
+                        <th>Payment Method: <%= payment_method %></th>
                     </tr>
                 </table>
             </div>
@@ -119,8 +119,8 @@
                         <th>Sub Total</th>
                     </tr>
 
-                    <% if(productDetails.length > 0) { %>
-                        <% productDetails.forEach(product => { %>
+                    <% if(product_details.length > 0) { %>
+                        <% product_details.forEach(product => { %>
                             <tr>
                                 <td><img src="https://loremflickr.com/200/200?random=1" class="product-image" alt="Product Image" /></td>
                                 <td><%= product.name %></td>

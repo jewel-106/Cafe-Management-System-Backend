@@ -12,15 +12,15 @@ const auth = require("../services/authentication");
 router.post("/generateReport", auth.authenticateToken, async (req, res) => {
   const generatedUuid = uuid.v1();
   const orderDetails = req.body;
-  let productDetailsReport = orderDetails.productDetails;
+  let productDetailsReport = orderDetails.product_details;
 
   // Parse product details if it's a string
   if (typeof productDetailsReport === 'string') {
     try {
       productDetailsReport = JSON.parse(productDetailsReport);
     } catch (err) {
-      console.error("Error parsing productDetails:", err);
-      return res.status(400).send("Invalid productDetails format");
+      console.error("Error parsing product_details:", err);
+      return res.status(400).send("Invalid product_details format");
     }
   }
 
@@ -35,10 +35,10 @@ router.post("/generateReport", auth.authenticateToken, async (req, res) => {
     orderDetails.name,
     generatedUuid,
     orderDetails.email,
-    orderDetails.contactNumber,
-    orderDetails.paymentMethod,
+    orderDetails.contact_number,
+    orderDetails.payment_method,
     orderDetails.totalAmount,
-    JSON.stringify(orderDetails.productDetails), // Store product details as a JSON string
+    JSON.stringify(orderDetails.product_details), // Store product details as a JSON string
     res.locals.email,
   ];
 
@@ -52,11 +52,11 @@ router.post("/generateReport", auth.authenticateToken, async (req, res) => {
 
     // Render EJS to HTML
     const htmlContent = await ejs.renderFile(path.join(__dirname, "report.ejs"), {
-      productDetails: productDetailsReport,
+      product_details: productDetailsReport,
       name: orderDetails.name,
       email: orderDetails.email,
-      contactNumber: orderDetails.contactNumber,
-      paymentMethod: orderDetails.paymentMethod,
+      contact_number: orderDetails.contact_number,
+      payment_method: orderDetails.payment_method,
       totalAmount: orderDetails.totalAmount,
     });
 
@@ -80,7 +80,7 @@ router.post("/generateReport", auth.authenticateToken, async (req, res) => {
 router.post("/getPdf", auth.authenticateToken, async (req, res) => {
   try {
     const orderDetails = req.body;
-    let productDetailsReport = orderDetails.productDetails;
+    let productDetailsReport = orderDetails.product_details;
     const pdfPath = `./generated_pdf/${orderDetails.uuid}.pdf`;
 
     // Check if the PDF already exists
@@ -94,8 +94,8 @@ router.post("/getPdf", auth.authenticateToken, async (req, res) => {
       try {
         productDetailsReport = JSON.parse(productDetailsReport);
       } catch (err) {
-        console.error("Error parsing productDetails:", err);
-        return res.status(400).send("Invalid productDetails format");
+        console.error("Error parsing product_details:", err);
+        return res.status(400).send("Invalid product_details format");
       }
     }
 
@@ -116,11 +116,11 @@ router.post("/getPdf", auth.authenticateToken, async (req, res) => {
 
     // Render EJS to HTML
     const htmlContent = await ejs.renderFile(path.join(__dirname, "report.ejs"), {
-      productDetails: productDetailsReport || JSON.parse(dbOrderDetails.product_details),
+      product_details: productDetailsReport || JSON.parse(dbOrderDetails.product_details),
       name: dbOrderDetails.name,
       email: dbOrderDetails.email,
-      contactNumber: dbOrderDetails.contact_number,
-      paymentMethod: dbOrderDetails.payment_method,
+      contact_number: dbOrderDetails.contact_number,
+      payment_method: dbOrderDetails.payment_method,
       totalAmount: dbOrderDetails.total,
     });
 
