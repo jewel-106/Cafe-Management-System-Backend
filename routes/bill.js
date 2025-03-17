@@ -115,7 +115,7 @@ router.post("/generateReport", auth.authenticateToken, async (req, res) => {
         .json({ message: "No supported browser found", error: error.message });
     }
     const page = await browser.newPage();
-    await page.setContent(htmlContent, { waitUntil: "load",timeout: 60000 });
+    await page.setContent(htmlContent, { waitUntil: "load",timeout: 720000 });
 
     const pdfPath = `./generated_pdf/${generatedUuid}.pdf`;
     await page.pdf({ path: pdfPath, format: "A4" });
@@ -194,7 +194,7 @@ router.post("/getPdf", auth.authenticateToken, async (req, res) => {
         .json({ message: "No supported browser found", error: error.message });
     }
     const page = await browser.newPage();
-    await page.setContent(htmlContent, { waitUntil: "load",timeout: 60000 });
+    await page.setContent(htmlContent, { waitUntil: "load",timeout: 720000 });
 
     await page.pdf({ path: pdfPath, format: "A4" });
 
