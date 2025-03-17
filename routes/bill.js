@@ -1,6 +1,7 @@
 
+
 const express = require("express");
-const pool = require("../connection"); // Import the PostgreSQL pool
+const pool = require("../connection");
 const router = express.Router();
 
 const ejs = require("ejs");
@@ -8,15 +9,15 @@ const fs = require("fs");
 const uuid = require("uuid");
 const auth = require("../services/authentication");
 
-const { PDFDocument,StandardFonts  } = require("pdf-lib"); // Import pdf-lib
+const { PDFDocument, StandardFonts, rgb } = require("pdf-lib");
 const path = require("path");
+
 
 router.post("/generateReport", auth.authenticateToken, async (req, res) => {
   const generatedUuid = uuid.v1();
   const orderDetails = req.body;
   let productDetailsReport = orderDetails.product_details;
 
-  // Parse product details if it's a string
   if (typeof productDetailsReport === "string") {
     try {
       productDetailsReport = JSON.parse(productDetailsReport);
@@ -26,12 +27,10 @@ router.post("/generateReport", auth.authenticateToken, async (req, res) => {
     }
   }
 
-  // SQL query to insert bill details into the database
   const query = `
     INSERT INTO "bill" (name, uuid, email, contact_number, payment_method, total, product_details, createdby) 
     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
   `;
-  // Parameters for the insert query
   const values = [
     orderDetails.name,
     generatedUuid,
@@ -39,53 +38,194 @@ router.post("/generateReport", auth.authenticateToken, async (req, res) => {
     orderDetails.contact_number,
     orderDetails.payment_method,
     orderDetails.totalAmount,
-    JSON.stringify(orderDetails.product_details), // Store product details as a JSON string
+    JSON.stringify(orderDetails.product_details),
     res.locals.email,
   ];
 
   try {
-    // Insert the order details into the bill table
     const result = await pool.query(query, values);
 
     if (result.rowCount === 0) {
       return res.status(500).json({ message: "Failed to insert bill details" });
     }
 
-    // Render EJS to HTML
-    const htmlContent = await ejs.renderFile(
-      path.join(__dirname, "report.ejs"),
-      {
-        product_details: productDetailsReport,
-        name: orderDetails.name,
-        email: orderDetails.email,
-        contact_number: orderDetails.contact_number,
-        payment_method: orderDetails.payment_method,
-        totalAmount: orderDetails.totalAmount,
-      }
-    );
-
-    // Create a new PDF document with pdf-lib
     const pdfDoc = await PDFDocument.create();
-
-    // Add a page to the PDF
-    const page = pdfDoc.addPage([600, 400]);
-
+    const page = pdfDoc.addPage([600, 800]);
     const { width, height } = page.getSize();
     const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+    const titleFont = await pdfDoc.embedFont(StandardFonts.TimesRomanBold);
 
-    // Add text content to the PDF (this can be customized based on the order details)
-    page.drawText(`Bill Report for ${orderDetails.name}`, { x: 50, y: height - 50, size: 20, font });
-    page.drawText(`Email: ${orderDetails.email}`, { x: 50, y: height - 100, size: 15, font });
-    page.drawText(`Total Amount: ${orderDetails.totalAmount}`, { x: 50, y: height - 150, size: 15, font });
-
-    // Assuming productDetailsReport is an array of products
-    let yOffset = height - 200;
-    productDetailsReport.forEach((product, index) => {
-      page.drawText(`Product ${index + 1}: ${product.name}`, { x: 50, y: yOffset, size: 12, font });
-      yOffset -= 20;
+    // Restaurant Header Section
+    page.drawText("Restaurant Name", {
+      x: 50,
+      y: height - 40,
+      size: 24,
+      font: titleFont,
+      color: rgb(0.2, 0.4, 0.8), // Blue color for title
+    });
+    page.drawText("Restaurant Address: 123 Street Name, City, State", {
+      x: 50,
+      y: height - 60,
+      size: 12,
+      font,
+      color: rgb(0.3, 0.3, 0.3),
+    });
+    page.drawText("Phone: +1 234 567 890", {
+      x: 50,
+      y: height - 80,
+      size: 12,
+      font,
+      color: rgb(0.3, 0.3, 0.3),
     });
 
-    // Save the generated PDF to a file
+    // Restaurant Promo Section
+    page.drawText("Special Offer: 20% OFF Your Next Order!", {
+      x: 50,
+      y: height - 120,
+      size: 16,
+      font: titleFont,
+      color: rgb(1, 0.5, 0), // Orange color for promotion
+    });
+    page.drawText("Use Promo Code: DISCOUNT20", {
+      x: 50,
+      y: height - 140,
+      size: 14,
+      font,
+      color: rgb(0, 0.5, 0), // Green for promo code
+    });
+
+    // Invoice Title
+    page.drawText("Invoice", {
+      x: width - 100,
+      y: height - 40,
+      size: 20,
+      font,
+      color: rgb(0, 0, 0),
+    });
+
+    // Customer Information
+    page.drawText(`Customer Name: ${orderDetails.name}`, {
+      x: 50,
+      y: height - 180,
+      size: 14,
+      font,
+      color: rgb(0, 0, 0),
+    });
+    page.drawText(`Email: ${orderDetails.email}`, {
+      x: 50,
+      y: height - 200,
+      size: 14,
+      font,
+      color: rgb(0, 0, 0),
+    });
+    page.drawText(`Contact: ${orderDetails.contact_number}`, {
+      x: 50,
+      y: height - 220,
+      size: 14,
+      font,
+      color: rgb(0, 0, 0),
+    });
+
+    // Order Details Table
+    const startY = height - 260;
+    const lineHeight = 20;
+
+    page.drawText("Product Name", {
+      x: 50,
+      y: startY,
+      size: 12,
+      font,
+      color: rgb(0, 0, 0),
+    });
+    page.drawText("Qty", {
+      x: 300,
+      y: startY,
+      size: 12,
+      font,
+      color: rgb(0, 0, 0),
+    });
+    page.drawText("Unit Price", {
+      x: 400,
+      y: startY,
+      size: 12,
+      font,
+      color: rgb(0, 0, 0),
+    });
+    page.drawText("Total", {
+      x: 500,
+      y: startY,
+      size: 12,
+      font,
+      color: rgb(0, 0, 0),
+    });
+
+    let yOffset = startY - lineHeight;
+
+    productDetailsReport.forEach((product, index) => {
+      page.drawText(product.name, {
+        x: 50,
+        y: yOffset,
+        size: 12,
+        font,
+        color: rgb(0, 0, 0),
+      });
+      page.drawText(product.quantity.toString(), {
+        x: 300,
+        y: yOffset,
+        size: 12,
+        font,
+        color: rgb(0, 0, 0),
+      });
+      page.drawText(`$${product.price}`, {
+        x: 400,
+        y: yOffset,
+        size: 12,
+        font,
+        color: rgb(0, 0, 0),
+      });
+      page.drawText(`$${(product.price * product.quantity).toFixed(2)}`, {
+        x: 500,
+        y: yOffset,
+        size: 12,
+        font,
+        color: rgb(0, 0, 0),
+      });
+      yOffset -= lineHeight;
+    });
+
+    // Total Amount Section
+    page.drawText(`Subtotal: $${orderDetails.totalAmount.toFixed(2)}`, {
+      x: 400,
+      y: yOffset,
+      size: 14,
+      font,
+      color: rgb(0, 0, 0),
+    });
+    yOffset -= lineHeight;
+    page.drawText(
+      `Tax (10%): $${(orderDetails.totalAmount * 0.1).toFixed(2)}`,
+      { x: 400, y: yOffset, size: 14, font, color: rgb(0, 0, 0) }
+    );
+    yOffset -= lineHeight;
+    page.drawText(`Total: $${(orderDetails.totalAmount * 1.1).toFixed(2)}`, {
+      x: 400,
+      y: yOffset,
+      size: 14,
+      font,
+      color: rgb(0, 0, 0),
+    });
+
+    // Payment Method
+    yOffset -= lineHeight;
+    page.drawText(`Payment Method: ${orderDetails.payment_method}`, {
+      x: 50,
+      y: yOffset,
+      size: 12,
+      font,
+      color: rgb(0, 0, 0),
+    });
+
+    // Save PDF
     const pdfBytes = await pdfDoc.save();
     const pdfPath = `./generated_pdf/${generatedUuid}.pdf`;
     fs.writeFileSync(pdfPath, pdfBytes);
@@ -93,7 +233,9 @@ router.post("/generateReport", auth.authenticateToken, async (req, res) => {
     return res.status(200).json({ uuid: generatedUuid });
   } catch (err) {
     console.error(err);
-    return res.status(500).json({ message: "Error generating report", error: err.message || err });
+    return res
+      .status(500)
+      .json({ message: "Error generating invoice", error: err.message || err });
   }
 });
 
@@ -109,63 +251,11 @@ router.post("/getPdf", auth.authenticateToken, async (req, res) => {
       return fs.createReadStream(pdfPath).pipe(res);
     }
 
-    // Parse product details if it's a string
-    if (typeof productDetailsReport === "string") {
-      try {
-        productDetailsReport = JSON.parse(productDetailsReport);
-      } catch (err) {
-        console.error("Error parsing product_details:", err);
-        return res.status(400).send("Invalid product_details format");
-      }
-    }
-
-    // Query to fetch the order details from the PostgreSQL database using the UUID
-    const query = `
-      SELECT name, email, contact_number, payment_method, total, product_details, createdby
-      FROM "bill"
-      WHERE uuid = $1
-    `;
-    const result = await pool.query(query, [orderDetails.uuid]);
-
-    if (result.rowCount === 0) {
-      return res.status(404).json({ message: "Order not found" });
-    }
-
-    // Use data from the database if available
-    const dbOrderDetails = result.rows[0];
-
-    // Create a new PDF document with pdf-lib
-    const pdfDoc = await PDFDocument.create();
-
-    // Add a page to the PDF
-    const page = pdfDoc.addPage([600, 400]);
-
-    const { width, height } = page.getSize();
-    const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
-
-    // Add text content to the PDF (this can be customized based on the order details)
-    page.drawText(`Bill Report for ${dbOrderDetails.name}`, { x: 50, y: height - 50, size: 20, font });
-    page.drawText(`Email: ${dbOrderDetails.email}`, { x: 50, y: height - 100, size: 15, font });
-    page.drawText(`Total Amount: ${dbOrderDetails.total}`, { x: 50, y: height - 150, size: 15, font });
-
-    // Assuming productDetailsReport is an array of products
-    let yOffset = height - 200;
-    const parsedProductDetails = JSON.parse(dbOrderDetails.product_details);
-    parsedProductDetails.forEach((product, index) => {
-      page.drawText(`Product ${index + 1}: ${product.name}`, { x: 50, y: yOffset, size: 12, font });
-      yOffset -= 20;
-    });
-
-    // Save the generated PDF to a file
-    const pdfBytes = await pdfDoc.save();
-    fs.writeFileSync(pdfPath, pdfBytes);
-
-    // Serve the newly generated PDF
-    res.contentType("application/pdf");
-    return fs.createReadStream(pdfPath).pipe(res);
   } catch (err) {
     console.error("Error generating PDF:", err);
-    return res.status(500).json({ error: "Failed to generate PDF", details: err.message });
+    return res
+      .status(500)
+      .json({ error: "Failed to generate PDF", details: err.message });
   }
 });
 
@@ -177,7 +267,9 @@ router.get("/getBills", auth.authenticateToken, async (req, res, next) => {
     return res.status(200).json(result.rows); // `rows` contains the result set in PostgreSQL
   } catch (err) {
     console.error("Error fetching bills:", err);
-    return res.status(500).json({ message: "Error fetching bills", error: err.message });
+    return res
+      .status(500)
+      .json({ message: "Error fetching bills", error: err.message });
   }
 });
 
@@ -195,226 +287,10 @@ router.delete("/delete/:id", auth.authenticateToken, async (req, res, next) => {
     return res.status(200).json({ message: "Bill Deleted Successfully" });
   } catch (err) {
     console.error("Error deleting bill:", err);
-    return res.status(500).json({ message: "Error deleting bill", error: err.message });
+    return res
+      .status(500)
+      .json({ message: "Error deleting bill", error: err.message });
   }
 });
 
 module.exports = router;
-
-
-
-// const express = require("express");
-// const pool = require("../connection"); // Import the PostgreSQL pool
-// const router = express.Router();
-
-// const ejs = require("ejs");
-// const puppeteer = require("puppeteer-core");
-// const os = require("os");
-// const chromeLambda = require('chrome-aws-lambda');
-// const path = require("path");
-// const fs = require("fs");
-// const uuid = require("uuid");
-// const auth = require("../services/authentication");
-
-// async function launchBrowser() {
-//   let browser;
-//   try {
-//     // Use chrome-aws-lambda for Puppeteer on serverless platforms like Vercel
-//     browser = await puppeteer.launch({
-//       executablePath: await chromeLambda.executablePath,
-//       args: chromeLambda.args,
-//       headless: chromeLambda.headless,
-//     });
-//     return browser;
-//   } catch (error) {
-//     console.error("Error launching browser:", error);
-//     throw new Error("No supported browser found. Please install Chrome, Edge, or Firefox.");
-//   }
-// }
-
-// router.post("/generateReport", auth.authenticateToken, async (req, res) => {
-//   const generatedUuid = uuid.v1();
-//   const orderDetails = req.body;
-//   let productDetailsReport = orderDetails.product_details;
-
-//   // Parse product details if it's a string
-//   if (typeof productDetailsReport === "string") {
-//     try {
-//       productDetailsReport = JSON.parse(productDetailsReport);
-//     } catch (err) {
-//       console.error("Error parsing product_details:", err);
-//       return res.status(400).send("Invalid product_details format");
-//     }
-//   }
-
-//   // SQL query to insert bill details into the database
-//   const query = `
-//     INSERT INTO "bill" (name, uuid, email, contact_number, payment_method, total, product_details, createdby) 
-//     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-//   `;
-//   // Parameters for the insert query
-//   const values = [
-//     orderDetails.name,
-//     generatedUuid,
-//     orderDetails.email,
-//     orderDetails.contact_number,
-//     orderDetails.payment_method,
-//     orderDetails.totalAmount,
-//     JSON.stringify(orderDetails.product_details), // Store product details as a JSON string
-//     res.locals.email,
-//   ];
-
-//   try {
-//     // Insert the order details into the bill table
-//     const result = await pool.query(query, values);
-
-//     if (result.rowCount === 0) {
-//       return res.status(500).json({ message: "Failed to insert bill details" });
-//     }
-
-//     // Render EJS to HTML
-//     const htmlContent = await ejs.renderFile(
-//       path.join(__dirname, "report.ejs"),
-//       {
-//         product_details: productDetailsReport,
-//         name: orderDetails.name,
-//         email: orderDetails.email,
-//         contact_number: orderDetails.contact_number,
-//         payment_method: orderDetails.payment_method,
-//         totalAmount: orderDetails.totalAmount,
-//       }
-//     );
-
-//     // Generate PDF using Puppeteer
-//     let browser;
-//     try {
-//       browser = await launchBrowser();
-//     } catch (error) {
-//       console.error("Error launching browser:", error);
-//       return res.status(500).json({ message: "No supported browser found", error: error.message });
-//     }
-
-//     const page = await browser.newPage();
-//     await page.setContent(htmlContent, { waitUntil: "load", timeout: 720000 });
-
-//     const pdfPath = `./generated_pdf/${generatedUuid}.pdf`;
-//     await page.pdf({ path: pdfPath, format: "A4" });
-
-//     await browser.close();
-
-//     return res.status(200).json({ uuid: generatedUuid });
-//   } catch (err) {
-//     console.error(err);
-//     return res.status(500).json({ message: "Error generating report", error: err.message || err });
-//   }
-// });
-
-// router.post("/getPdf", auth.authenticateToken, async (req, res) => {
-//   try {
-//     const orderDetails = req.body;
-//     let productDetailsReport = orderDetails.product_details;
-//     const pdfPath = `./generated_pdf/${orderDetails.uuid}.pdf`;
-
-//     // Check if the PDF already exists
-//     if (fs.existsSync(pdfPath)) {
-//       res.contentType("application/pdf");
-//       return fs.createReadStream(pdfPath).pipe(res);
-//     }
-
-//     // Parse product details if it's a string
-//     if (typeof productDetailsReport === "string") {
-//       try {
-//         productDetailsReport = JSON.parse(productDetailsReport);
-//       } catch (err) {
-//         console.error("Error parsing product_details:", err);
-//         return res.status(400).send("Invalid product_details format");
-//       }
-//     }
-
-//     // Query to fetch the order details from the PostgreSQL database using the UUID
-//     const query = `
-//       SELECT name, email, contact_number, payment_method, total, product_details, createdby
-//       FROM "bill"
-//       WHERE uuid = $1
-//     `;
-//     const result = await pool.query(query, [orderDetails.uuid]);
-
-//     if (result.rowCount === 0) {
-//       return res.status(404).json({ message: "Order not found" });
-//     }
-
-//     // Use data from the database if available
-//     const dbOrderDetails = result.rows[0];
-
-//     // Render EJS to HTML
-//     const htmlContent = await ejs.renderFile(
-//       path.join(__dirname, "report.ejs"),
-//       {
-//         product_details:
-//           productDetailsReport || JSON.parse(dbOrderDetails.product_details),
-//         name: dbOrderDetails.name,
-//         email: dbOrderDetails.email,
-//         contact_number: dbOrderDetails.contact_number,
-//         payment_method: dbOrderDetails.payment_method,
-//         totalAmount: dbOrderDetails.total,
-//       }
-//     );
-
-//     // Generate PDF using Puppeteer
-//     let browser;
-//     try {
-//       browser = await launchBrowser();
-//     } catch (error) {
-//       console.error("Error launching browser:", error);
-//       return res.status(500).json({ message: "No supported browser found", error: error.message });
-//     }
-
-//     const page = await browser.newPage();
-//     await page.setContent(htmlContent, { waitUntil: "load", timeout: 720000 });
-
-//     await page.pdf({ path: pdfPath, format: "A4" });
-
-//     await browser.close();
-
-//     // Serve the newly generated PDF
-//     res.contentType("application/pdf");
-//     return fs.createReadStream(pdfPath).pipe(res);
-//   } catch (err) {
-//     console.error("Error generating PDF:", err);
-//     return res.status(500).json({ error: "Failed to generate PDF", details: err.message });
-//   }
-// });
-
-// router.get("/getBills", auth.authenticateToken, async (req, res, next) => {
-//   try {
-//     const query = `SELECT * FROM "bill" ORDER BY id DESC`;
-//     const result = await pool.query(query);
-
-//     return res.status(200).json(result.rows); // `rows` contains the result set in PostgreSQL
-//   } catch (err) {
-//     console.error("Error fetching bills:", err);
-//     return res.status(500).json({ message: "Error fetching bills", error: err.message });
-//   }
-// });
-
-// router.delete("/delete/:id", auth.authenticateToken, async (req, res, next) => {
-//   const id = req.params.id;
-
-//   try {
-//     const query = `DELETE FROM "bill" WHERE id = $1`;
-//     const result = await pool.query(query, [id]);
-
-//     if (result.rowCount === 0) {
-//       return res.status(404).json({ message: "Bill id not found" });
-//     }
-
-//     return res.status(200).json({ message: "Bill Deleted Successfully" });
-//   } catch (err) {
-//     console.error("Error deleting bill:", err);
-//     return res.status(500).json({ message: "Error deleting bill", error: err.message });
-//   }
-// });
-
-// module.exports = router;
-
-
