@@ -3,21 +3,15 @@ const pool = require("../connection"); // Import the PostgreSQL pool
 const router = express.Router();
 
 const ejs = require("ejs");
-<<<<<<< HEAD
-const puppeteer = require("puppeteer");
-=======
 //const puppeteer = require("puppeteer");
 const puppeteer = require("puppeteer-core");
 const { firefox } = require("playwright");
 const os = require("os");
->>>>>>> 86b249f (update)
 const path = require("path");
 const fs = require("fs");
 const uuid = require("uuid");
 const auth = require("../services/authentication");
 
-<<<<<<< HEAD
-=======
 async function launchBrowser() {
   let executablePath;
 
@@ -56,18 +50,13 @@ async function launchBrowser() {
   }
 }
 
->>>>>>> 86b249f (update)
 router.post("/generateReport", auth.authenticateToken, async (req, res) => {
   const generatedUuid = uuid.v1();
   const orderDetails = req.body;
   let productDetailsReport = orderDetails.product_details;
 
   // Parse product details if it's a string
-<<<<<<< HEAD
-  if (typeof productDetailsReport === 'string') {
-=======
   if (typeof productDetailsReport === "string") {
->>>>>>> 86b249f (update)
     try {
       productDetailsReport = JSON.parse(productDetailsReport);
     } catch (err) {
@@ -81,10 +70,6 @@ router.post("/generateReport", auth.authenticateToken, async (req, res) => {
     INSERT INTO "bill" (name, uuid, email, contact_number, payment_method, total, product_details, createdby) 
     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
   `;
-<<<<<<< HEAD
-  
-=======
->>>>>>> 86b249f (update)
   // Parameters for the insert query
   const values = [
     orderDetails.name,
@@ -106,21 +91,6 @@ router.post("/generateReport", auth.authenticateToken, async (req, res) => {
     }
 
     // Render EJS to HTML
-<<<<<<< HEAD
-    const htmlContent = await ejs.renderFile(path.join(__dirname, "report.ejs"), {
-      product_details: productDetailsReport,
-      name: orderDetails.name,
-      email: orderDetails.email,
-      contact_number: orderDetails.contact_number,
-      payment_method: orderDetails.payment_method,
-      totalAmount: orderDetails.totalAmount,
-    });
-
-    // Generate PDF using Puppeteer
-    const browser = await puppeteer.launch();
-    const page = await browser.newPage();
-    await page.setContent(htmlContent, { waitUntil: "load" });
-=======
     const htmlContent = await ejs.renderFile(
       path.join(__dirname, "report.ejs"),
       {
@@ -146,7 +116,6 @@ router.post("/generateReport", auth.authenticateToken, async (req, res) => {
     }
     const page = await browser.newPage();
     await page.setContent(htmlContent, { waitUntil: "load",timeout: 60000 });
->>>>>>> 86b249f (update)
 
     const pdfPath = `./generated_pdf/${generatedUuid}.pdf`;
     await page.pdf({ path: pdfPath, format: "A4" });
@@ -156,13 +125,9 @@ router.post("/generateReport", auth.authenticateToken, async (req, res) => {
     return res.status(200).json({ uuid: generatedUuid });
   } catch (err) {
     console.error(err);
-<<<<<<< HEAD
-    return res.status(500).json({ message: "Error generating report", error: err.message || err });
-=======
     return res
       .status(500)
       .json({ message: "Error generating report", error: err.message || err });
->>>>>>> 86b249f (update)
   }
 });
 
@@ -179,11 +144,7 @@ router.post("/getPdf", auth.authenticateToken, async (req, res) => {
     }
 
     // Parse product details if it's a string
-<<<<<<< HEAD
-    if (typeof productDetailsReport === 'string') {
-=======
     if (typeof productDetailsReport === "string") {
->>>>>>> 86b249f (update)
       try {
         productDetailsReport = JSON.parse(productDetailsReport);
       } catch (err) {
@@ -208,21 +169,6 @@ router.post("/getPdf", auth.authenticateToken, async (req, res) => {
     const dbOrderDetails = result.rows[0];
 
     // Render EJS to HTML
-<<<<<<< HEAD
-    const htmlContent = await ejs.renderFile(path.join(__dirname, "report.ejs"), {
-      product_details: productDetailsReport || JSON.parse(dbOrderDetails.product_details),
-      name: dbOrderDetails.name,
-      email: dbOrderDetails.email,
-      contact_number: dbOrderDetails.contact_number,
-      payment_method: dbOrderDetails.payment_method,
-      totalAmount: dbOrderDetails.total,
-    });
-
-    // Generate PDF using Puppeteer
-    const browser = await puppeteer.launch();
-    const page = await browser.newPage();
-    await page.setContent(htmlContent, { waitUntil: "load" });
-=======
     const htmlContent = await ejs.renderFile(
       path.join(__dirname, "report.ejs"),
       {
@@ -249,7 +195,6 @@ router.post("/getPdf", auth.authenticateToken, async (req, res) => {
     }
     const page = await browser.newPage();
     await page.setContent(htmlContent, { waitUntil: "load",timeout: 60000 });
->>>>>>> 86b249f (update)
 
     await page.pdf({ path: pdfPath, format: "A4" });
 
@@ -270,13 +215,6 @@ router.get("/getBills", auth.authenticateToken, async (req, res, next) => {
   try {
     const query = `SELECT * FROM "bill" ORDER BY id DESC`;
     const result = await pool.query(query);
-<<<<<<< HEAD
-    
-    return res.status(200).json(result.rows); // `rows` contains the result set in PostgreSQL
-  } catch (err) {
-    console.error("Error fetching bills:", err);
-    return res.status(500).json({ message: "Error fetching bills", error: err.message });
-=======
 
     return res.status(200).json(result.rows); // `rows` contains the result set in PostgreSQL
   } catch (err) {
@@ -284,7 +222,6 @@ router.get("/getBills", auth.authenticateToken, async (req, res, next) => {
     return res
       .status(500)
       .json({ message: "Error fetching bills", error: err.message });
->>>>>>> 86b249f (update)
   }
 });
 
@@ -302,13 +239,9 @@ router.delete("/delete/:id", auth.authenticateToken, async (req, res, next) => {
     return res.status(200).json({ message: "Bill Deleted Successfully" });
   } catch (err) {
     console.error("Error deleting bill:", err);
-<<<<<<< HEAD
-    return res.status(500).json({ message: "Error deleting bill", error: err.message });
-=======
     return res
       .status(500)
       .json({ message: "Error deleting bill", error: err.message });
->>>>>>> 86b249f (update)
   }
 });
 
