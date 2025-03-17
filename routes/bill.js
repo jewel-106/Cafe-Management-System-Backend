@@ -244,6 +244,7 @@ router.post("/getPdf", auth.authenticateToken, async (req, res) => {
     const orderDetails = req.body;
     let productDetailsReport = orderDetails.product_details;
     const pdfPath = `./generated_pdf/${orderDetails.uuid}.pdf`;
+    console.log('pdf_path',pdfPath);
 
     // Check if the PDF already exists
     if (fs.existsSync(pdfPath)) {
@@ -251,12 +252,228 @@ router.post("/getPdf", auth.authenticateToken, async (req, res) => {
       return fs.createReadStream(pdfPath).pipe(res);
     }
 
-  } catch (err) {
-    console.error("Error generating PDF:", err);
-    return res
-      .status(500)
-      .json({ error: "Failed to generate PDF", details: err.message });
+
+
+    
+    // Parse product details if it's a string
+    if (typeof productDetailsReport === "string") {
+      try {
+        productDetailsReport = JSON.parse(productDetailsReport);
+      } catch (err) {
+        console.error("Error parsing product_details:", err);
+        return res.status(400).send("Invalid product_details format");
+      }
+    }
+
+    // Query to fetch the order details from the PostgreSQL database using the UUID
+    const query = `
+      SELECT name, email, contact_number, payment_method, total, product_details, createdby
+      FROM "bill"
+      WHERE uuid = $1
+    `;
+
+    try {
+      const result = await pool.query(query, [orderDetails.uuid]);
+  
+      if (result.rowCount === 0) {
+        return res.status(500).json({ message: "Failed to insert bill details" });
+      }
+  
+      const pdfDoc = await PDFDocument.create();
+      const page = pdfDoc.addPage([600, 800]);
+      const { width, height } = page.getSize();
+      const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+      const titleFont = await pdfDoc.embedFont(StandardFonts.TimesRomanBold);
+  
+      // Restaurant Header Section
+      page.drawText("Restaurant Name", {
+        x: 50,
+        y: height - 40,
+        size: 24,
+        font: titleFont,
+        color: rgb(0.2, 0.4, 0.8), // Blue color for title
+      });
+      page.drawText("Restaurant Address: 123 Street Name, City, State", {
+        x: 50,
+        y: height - 60,
+        size: 12,
+        font,
+        color: rgb(0.3, 0.3, 0.3),
+      });
+      page.drawText("Phone: +1 234 567 890", {
+        x: 50,
+        y: height - 80,
+        size: 12,
+        font,
+        color: rgb(0.3, 0.3, 0.3),
+      });
+  
+      // Restaurant Promo Section
+      page.drawText("Special Offer: 20% OFF Your Next Order!", {
+        x: 50,
+        y: height - 120,
+        size: 16,
+        font: titleFont,
+        color: rgb(1, 0.5, 0), // Orange color for promotion
+      });
+      page.drawText("Use Promo Code: DISCOUNT20", {
+        x: 50,
+        y: height - 140,
+        size: 14,
+        font,
+        color: rgb(0, 0.5, 0), // Green for promo code
+      });
+  
+      // Invoice Title
+      page.drawText("Invoice", {
+        x: width - 100,
+        y: height - 40,
+        size: 20,
+        font,
+        color: rgb(0, 0, 0),
+      });
+  
+      // Customer Information
+      page.drawText(`Customer Name: ${orderDetails.name}`, {
+        x: 50,
+        y: height - 180,
+        size: 14,
+        font,
+        color: rgb(0, 0, 0),
+      });
+      page.drawText(`Email: ${orderDetails.email}`, {
+        x: 50,
+        y: height - 200,
+        size: 14,
+        font,
+        color: rgb(0, 0, 0),
+      });
+      page.drawText(`Contact: ${orderDetails.contact_number}`, {
+        x: 50,
+        y: height - 220,
+        size: 14,
+        font,
+        color: rgb(0, 0, 0),
+      });
+  
+      // Order Details Table
+      const startY = height - 260;
+      const lineHeight = 20;
+  
+      page.drawText("Product Name", {
+        x: 50,
+        y: startY,
+        size: 12,
+        font,
+        color: rgb(0, 0, 0),
+      });
+      page.drawText("Qty", {
+        x: 300,
+        y: startY,
+        size: 12,
+        font,
+        color: rgb(0, 0, 0),
+      });
+      page.drawText("Unit Price", {
+        x: 400,
+        y: startY,
+        size: 12,
+        font,
+        color: rgb(0, 0, 0),
+      });
+      page.drawText("Total", {
+        x: 500,
+        y: startY,
+        size: 12,
+        font,
+        color: rgb(0, 0, 0),
+      });
+  
+      let yOffset = startY - lineHeight;
+  
+      productDetailsReport.forEach((product, index) => {
+        page.drawText(product.name, {
+          x: 50,
+          y: yOffset,
+          size: 12,
+          font,
+          color: rgb(0, 0, 0),
+        });
+        page.drawText(product.quantity.toString(), {
+          x: 300,
+          y: yOffset,
+          size: 12,
+          font,
+          color: rgb(0, 0, 0),
+        });
+        page.drawText(`$${product.price}`, {
+          x: 400,
+          y: yOffset,
+          size: 12,
+          font,
+          color: rgb(0, 0, 0),
+        });
+        page.drawText(`$${(product.price * product.quantity).toFixed(2)}`, {
+          x: 500,
+          y: yOffset,
+          size: 12,
+          font,
+          color: rgb(0, 0, 0),
+        });
+        yOffset -= lineHeight;
+      });
+  
+      // Total Amount Section
+      page.drawText(`Subtotal: $${orderDetails.totalAmount.toFixed(2)}`, {
+        x: 400,
+        y: yOffset,
+        size: 14,
+        font,
+        color: rgb(0, 0, 0),
+      });
+      yOffset -= lineHeight;
+      page.drawText(
+        `Tax (10%): $${(orderDetails.totalAmount * 0.1).toFixed(2)}`,
+        { x: 400, y: yOffset, size: 14, font, color: rgb(0, 0, 0) }
+      );
+      yOffset -= lineHeight;
+      page.drawText(`Total: $${(orderDetails.totalAmount * 1.1).toFixed(2)}`, {
+        x: 400,
+        y: yOffset,
+        size: 14,
+        font,
+        color: rgb(0, 0, 0),
+      });
+  
+      // Payment Method
+      yOffset -= lineHeight;
+      page.drawText(`Payment Method: ${orderDetails.payment_method}`, {
+        x: 50,
+        y: yOffset,
+        size: 12,
+        font,
+        color: rgb(0, 0, 0),
+      });
+  
+      // Save PDF
+      const pdfBytes = await pdfDoc.save();
+      const pdfPath = `./generated_pdf/${generatedUuid}.pdf`;
+      fs.writeFileSync(pdfPath, pdfBytes);
+  
+      return res.status(200).json({ uuid: generatedUuid });
+    } catch (err) {
+      console.error(err);
+      return res
+        .status(500)
+        .json({ message: "Error generating invoice", error: err.message || err });
+    }
+  }catch(err){
+    console.error(err);
+    return res 
+    .status(500)
+    .json({message: "Error GetPdf",error:err.message || err})
   }
+
 });
 
 router.get("/getBills", auth.authenticateToken, async (req, res, next) => {
