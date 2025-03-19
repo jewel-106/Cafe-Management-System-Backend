@@ -10,6 +10,8 @@ const bcrypt = require("bcryptjs");
 var auth = require("../services/authentication");
 var checkRole = require("../services/checkRole");
 var pool = require("../connection");
+const { CloudinaryStorage } = require("multer-storage-cloudinary");
+const cloudinary = require("cloudinary").v2;
 
 var transporter = nodemailer.createTransport({
   host: "sandbox.smtp.mailtrap.io",
@@ -20,25 +22,46 @@ var transporter = nodemailer.createTransport({
   },
 });
 
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, "uploads/"); // Save files in the 'uploads' directory
-  },
-  filename: function (req, file, cb) {
-    cb(null, Date.now() + path.extname(file.originalname)); // Rename the file to avoid conflicts
-  },
+// const storage = multer.diskStorage({
+//   destination: function (req, file, cb) {
+//     cb(null, "uploads/"); // Save files in the 'uploads' directory
+//   },
+//   filename: function (req, file, cb) {
+//     cb(null, Date.now() + path.extname(file.originalname)); // Rename the file to avoid conflicts
+//   },
+// });
+
+// const upload = multer({
+//   storage: storage,
+//   limits: { fileSize: 100 * 1024 * 1024 }, // 100 MB limit
+// });
+
+
+// 🔹 Cloudinary Configuration
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET
 });
 
-const upload = multer({
-  storage: storage,
-  limits: { fileSize: 100 * 1024 * 1024 }, // 100 MB limit
+// 🔹 Multer Storage Setup (Uploads to Cloudinary)
+const storage = new CloudinaryStorage({
+  cloudinary: cloudinary,
+  params: {
+      folder: "users",
+      format: async (req, file) => "png", // Convert all to PNG
+      public_id: (req, file) => `user_${Date.now()}`
+  }
 });
+
+const upload = multer({ storage });
+
 
 router.post("/signup", upload.single("profile_photo"), (req, res) => {
   console.log(req);
 
   let { name, email, contact_number, password } = req.body;
-  let profile_photo = req.file;
+  //let profile_photo = req.file;
 
   // Check if email already exists
   pool.query(
@@ -57,6 +80,8 @@ router.post("/signup", upload.single("profile_photo"), (req, res) => {
       // Hash password
       const hashedPassword = bcrypt.hashSync(password, 10);
 
+      const imageUrl = req.file ? req.file.path : null;
+
       // Insert new user into the database
       pool.query(
         'INSERT INTO "user" (name, email, contact_number, password, profile_photo, status, role) VALUES ($1, $2, $3, $4, $5, $6, $7)',
@@ -65,7 +90,7 @@ router.post("/signup", upload.single("profile_photo"), (req, res) => {
           email,
           contact_number,
           hashedPassword,
-          profile_photo ? profile_photo.filename : null,
+          imageUrl,
           "true", // Ensure this is a boolean if your column is boolean
           "user",
         ],
@@ -350,88 +375,132 @@ router.get("/getUserDetails", auth.authenticateToken, (req, res) => {
     const user = results.rows[0];
     console.log("User data:", user);
 
-    // Construct the full URL for the profile photo (if it exists)
-    if (user.profile_photo) {
-      user.profile_photo = `${req.protocol}://${req.get("host")}/uploads/${
-        user.profile_photo
-      }`;
-    }
 
     // Return the user data
     return res.status(200).json(user);
   });
 });
 
-router.put(
-  "/updateProfile",
-  auth.authenticateToken,
-  upload.single("profilePhoto"),
-  (req, res) => {
-    const { name, contact_number, email } = req.body;
-    const id = req.user.id;
+router.put("/updateProfile", auth.authenticateToken, upload.single("profile_photo"), async (req, res) => {
+  const { name, contact_number, email } = req.body;
+  const userId = req.user.id;
 
-    // Validate required fields
-    if (!name || !contact_number || !email) {
-      return res.status(400).json({ message: "All fields are required" });
-    }
+  try {
+      // Get Current User
+      pool.query(`SELECT * FROM "user" WHERE id = $1`, [userId], async (err, results) => {
+          if (err) {
+              return res.status(500).json({ message: "Database query error", error: err.message });
+          }
 
-    // Step 1: Fetch the existing profile photo URL from the database
-    const fetchQuery = `SELECT profile_photo FROM "user" WHERE id = $1`;
-    pool.query(fetchQuery, [id], (fetchErr, fetchResult) => {
-      if (fetchErr) {
-        return res
-          .status(500)
-          .json({
-            message: "Error fetching profile data",
-            error: fetchErr.message || fetchErr,
+          if (results.rows.length === 0) {  // Use results.rows.length instead of results.length
+              return res.status(404).json({ message: "User not found!" });
+          }
+
+          const user = results.rows[0];  // Use results.rows[0] instead of results[0]
+
+          // Prepare updated values
+          const updatedName = name || user.name;
+          const updatedEmail = email || user.email;
+          const updatedContactNumber = contact_number || user.contact_number;
+          const updatedProfileImage = req.file ? req.file.path : user.profile_image;
+
+          // Update database
+          const sql = `UPDATE "user" SET name = $1, email = $2, contact_number = $3, profile_photo = $4 WHERE id = $5 RETURNING *`;
+          pool.query(sql, [updatedName, updatedEmail, updatedContactNumber, updatedProfileImage, userId], (err, updatedResult) => {
+              if (err) {
+                  return res.status(500).json({ message: "Error updating profile", error: err.message });
+              }
+
+              const updatedUser = updatedResult.rows[0];
+
+              res.status(200).json({
+                  message: "Profile updated successfully!",
+                  user: { 
+                      id: updatedUser.id, 
+                      name: updatedUser.name, 
+                      email: updatedUser.email, 
+                      contact_number: updatedUser.contact_number, 
+                      profile_photo: updatedUser.profile_image 
+                  }
+              });
           });
-      }
-
-      if (fetchResult.rowCount === 0) {
-        return res.status(404).json({ message: "User not found" });
-      }
-
-      // Step 2: Use the existing profile photo URL if no new file is uploaded
-      let profilePhotoUrl = fetchResult.rows[0].profile_photo; // Default to existing photo
-      if (req.file) {
-        profilePhotoUrl = req.file.filename; // Update to new photo if uploaded
-      }
-
-      // Step 3: Update the user profile
-      const updateQuery = `UPDATE "user" SET name = $1, contact_number = $2, email = $3, profile_photo = $4 WHERE id = $5`;
-      const values = [name, contact_number, email, profilePhotoUrl, id];
-
-      pool.query(updateQuery, values, (updateErr, updateResult) => {
-        if (updateErr) {
-          return res
-            .status(500)
-            .json({
-              message: "Error updating profile",
-              error: updateErr.message || updateErr,
-            });
-        }
-
-        if (updateResult.rowCount === 0) {
-          return res
-            .status(404)
-            .json({ message: "User not found or no changes made" });
-        }
-
-        // Step 4: Send back the updated user data including profile photo URL
-        const updatedUser = {
-          id,
-          name,
-          contact_number,
-          email,
-          profilePhotoUrl,
-        };
-        return res.status(200).json({
-          message: "Profile updated successfully",
-          user: updatedUser,
-        });
       });
-    });
+  } catch (err) {
+      res.status(500).json({ message: "Server Error", error: err.message });
   }
-);
+});
+
+
+// router.put(
+//   "/updateProfile",
+//   auth.authenticateToken,
+//   upload.single("profile_photo"),
+//   (req, res) => {
+//     const { name, contact_number, email } = req.body;
+//     const id = req.user.id;
+
+//     // Validate required fields
+//     if (!name || !contact_number || !email) {
+//       return res.status(400).json({ message: "All fields are required" });
+//     }
+
+//     // Step 1: Fetch the existing profile photo URL from the database
+//     const fetchQuery = `SELECT profile_photo FROM "user" WHERE id = $1`;
+//     pool.query(fetchQuery, [id], (fetchErr, fetchResult) => {
+//       if (fetchErr) {
+//         return res
+//           .status(500)
+//           .json({
+//             message: "Error fetching profile data",
+//             error: fetchErr.message || fetchErr,
+//           });
+//       }
+
+//       if (fetchResult.rowCount === 0) {
+//         return res.status(404).json({ message: "User not found" });
+//       }
+
+//       // Step 2: Use the existing profile photo URL if no new file is uploaded
+//       let profilePhotoUrl = fetchResult.rows[0].profile_photo; // Default to existing photo
+//       if (req.file) {
+//         profilePhotoUrl = req.file.filename; // Update to new photo if uploaded
+//       }
+
+//       // Step 3: Update the user profile
+//       const updateQuery = `UPDATE "user" SET name = $1, contact_number = $2, email = $3, profile_photo = $4 WHERE id = $5`;
+//       const values = [name, contact_number, email, profilePhotoUrl, id];
+
+//       pool.query(updateQuery, values, (updateErr, updateResult) => {
+//         if (updateErr) {
+//           return res
+//             .status(500)
+//             .json({
+//               message: "Error updating profile",
+//               error: updateErr.message || updateErr,
+//             });
+//         }
+
+//         if (updateResult.rowCount === 0) {
+//           return res
+//             .status(404)
+//             .json({ message: "User not found or no changes made" });
+//         }
+
+//         // Step 4: Send back the updated user data including profile photo URL
+//         const updatedUser = {
+//           id,
+//           name,
+//           contact_number,
+//           email,
+//           profilePhotoUrl,
+//         };
+//         return res.status(200).json({
+//           message: "Profile updated successfully",
+//           user: updatedUser,
+//         });
+//       });
+//     });
+//   }
+// );
 
 module.exports = router;

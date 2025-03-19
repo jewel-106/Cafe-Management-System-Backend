@@ -30,6 +30,8 @@
     "path": "^0.12.7",
     "pdf-lib": "^1.17.1",
     "pg": "^8.14.0",
-    "uuid": "^11.1.0"
+    "uuid": "^11.1.0",
+    "multer-storage-cloudinary": "^4.0.0",
+    "cloudinary": "^1.41.3"
   }
 }
